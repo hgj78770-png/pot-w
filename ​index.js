@@ -1,24 +1,35 @@
-const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, delay } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const qrcode = require('qrcode-terminal');
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
+        printQRInTerminal: false, // عطلنا الباركود هنا
         logger: pino({ level: 'silent' })
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        if (qr) {
-            console.log('--- امسح الرمز المربع (QR Code) لتشغيل البوت ---');
-            qrcode.generate(qr, { small: true });
+    // حط رقم جوالك هنا مع مفتاح الدولة بدون صفر وبدون علامة +
+    // مثال إذا كان رقمك سعودي: 966500000000
+    const phoneNumber = "966573677930"; 
+
+    if (!sock.authState.creds.registered) {
+        await delay(3000); // ننتظر ثواني لين يجهز السيرفر
+        try {
+            const code = await sock.requestPairingCode(phoneNumber);
+            console.log('\n======================================');
+            console.log(`🔑 كود الربط الخاص بك هو: ${code}`);
+            console.log('======================================\n');
+        } catch (error) {
+            console.log('خطأ في طلب الكود، تأكد من الرقم:', error);
         }
+    }
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection } = update;
         if (connection === 'close') {
             console.log('جاري إعادة الاتصال...');
             startBot();
@@ -30,17 +41,14 @@ async function startBot() {
     sock.ev.on('messages.upsert', async m => {
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
-
         const messageType = Object.keys(msg.message)[0];
         const text = messageType === 'conversation' ? msg.message.conversation : 
                      messageType === 'extendedTextMessage' ? msg.message.extendedTextMessage.text : '';
 
-        // أمر تجريبي بسيط للرد التلقائي
         if (text.toLowerCase() === 'هلا') {
-            await sock.sendMessage(msg.key.remoteJid, { text: 'هلا بك عيوني! أنا بوت الواتساب الخاص بك شغال 100%' });
+            await sock.sendMessage(msg.key.remoteJid, { text: 'هلا بك! أنا بوت الواتساب الخاص بك شغال 100%' });
         }
     });
 }
 
 startBot();
- 
