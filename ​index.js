@@ -6,18 +6,16 @@ async function startBot() {
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false, // عطلنا الباركود هنا
+        printQRInTerminal: false, 
         logger: pino({ level: 'silent' })
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // حط رقم جوالك هنا مع مفتاح الدولة بدون صفر وبدون علامة +
-    // مثال إذا كان رقمك سعودي: 966500000000
     const phoneNumber = "966573677930"; 
 
     if (!sock.authState.creds.registered) {
-        await delay(3000); // ننتظر ثواني لين يجهز السيرفر
+        await delay(3000); 
         try {
             const code = await sock.requestPairingCode(phoneNumber);
             console.log('\n======================================');
