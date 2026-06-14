@@ -1,56 +1,46 @@
-const { Client, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const qrcode = require('qrcode-terminal');
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
-    ]
-});
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        logger: pino({ level: 'silent' })
+    });
 
-const bannedWords = ['كلمة_ممنوعة1', 'كلمة_ممنوعة2'];
-const warnings = new Map();
+    sock.ev.on('creds.update', saveCreds);
 
-client.once('ready', () => {
-    console.log(`تم تشغيل البوت بنجاح باسم: ${client.user.tag}`);
-});
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) {
+            console.log('--- امسح الرمز المربع (QR Code) لتشغيل البوت ---');
+            qrcode.generate(qr, { small: true });
+        }
+        if (connection === 'close') {
+            console.log('جاري إعادة الاتصال...');
+            startBot();
+        } else if (connection === 'open') {
+            console.log('✅ تم اتصال بوت الواتساب بنجاح وهو جاهز الآن!');
+        }
+    });
 
-client.on('messageCreate', async (message) => {
-    if (message.author.bot || !message.guild) return;
+    sock.ev.on('messages.upsert', async m => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
-    const hasBannedWord = bannedWords.some(word => message.content.toLowerCase().includes(word));
-    if (hasBannedWord) {
-        await message.delete().catch(err => console.log(err));
-        const userId = message.author.id;
-        let userWarnings = warnings.get(userId) || 0;
-        userWarnings++;
-        warnings.set(userId, userWarnings);
-        message.channel.send(`⚠️ ${message.author}، ممنوع استخدام هذه الكلمات! [تحذير ${userWarnings}]`);
-    }
-});
+        const messageType = Object.keys(msg.message)[0];
+        const text = messageType === 'conversation' ? msg.message.conversation : 
+                     messageType === 'extendedTextMessage' ? msg.message.extendedTextMessage.text : '';
 
-client.on('messageCreate', async (message) => {
-    if (message.author.bot || !message.content.startsWith('!')) return;
+        // أمر تجريبي بسيط للرد التلقائي
+        if (text.toLowerCase() === 'هلا') {
+            await sock.sendMessage(msg.key.remoteJid, { text: 'هلا بك عيوني! أنا بوت الواتساب الخاص بك شغال 100%' });
+        }
+    });
+}
 
-    const args = message.content.slice(1).trim().split(/ +/);
-    const command = args.shift().toLowerCase();
-
-    if (command === 'kick') {
-        if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) return message.reply('❌ لا تملك صلاحية.');
-        const member = message.mentions.members.first();
-        if (!member) return message.reply('❌ منشن العضو.');
-        await member.kick();
-        message.channel.send(`✅ تم الطرد.`);
-    }
-
-    if (command === 'ban') {
-        if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) return message.reply('❌ لا تملك صلاحية.');
-        const member = message.mentions.members.first();
-        if (!member) return message.reply('❌ منشن العضو.');
-        await member.ban();
-        message.channel.send(`⛔ تم الحظر.`);
-    }
-});
-
-client.login(process.env.DISCORD_TOKEN);
+startBot();
+ 
