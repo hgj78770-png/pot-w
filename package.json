@@ -1,12 +1,14 @@
 {
-  "name": "discord-mod-bot",
+  "name": "whatsapp-bot",
   "version": "1.0.0",
-  "description": "Automated Community Moderation Bot",
+  "description": "WhatsApp Multi-Device Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.14.1"
+    "@whiskeysockets/baileys": "^6.6.0",
+    "qrcode-terminal": "^0.12.0",
+    "pino": "^8.19.0"
   }
 }
